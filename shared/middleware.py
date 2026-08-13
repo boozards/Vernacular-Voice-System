@@ -23,7 +23,7 @@ E2E_RESPONSE_LATENCY = Histogram(
     "End-to-end response latency in seconds",
     ["language"]
 )
-
+# Note: E2E_RESPONSE_LATENCY is intended to be recorded by the orchestrator service.
 
 class CorrelationAndMetricsMiddleware(BaseHTTPMiddleware):
     def __init__(self, app, service_name: str):
@@ -35,7 +35,8 @@ class CorrelationAndMetricsMiddleware(BaseHTTPMiddleware):
         token = correlation_id_var.set(correlation_id)
 
         start_time = time.time()
-        endpoint = request.url.path
+        route = request.scope.get("route")
+        endpoint = route.path if route and hasattr(route, "path") else request.url.path
 
         try:
             response = await call_next(request)

@@ -13,25 +13,30 @@ from catalog_service.search_engine import catalog_search_engine
 setup_logger("catalog_service", settings.LOG_LEVEL)
 logger = logging.getLogger("catalog_service")
 
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await es_catalog_client.connect()
+    yield
+
 app = FastAPI(
     title="VoiceKart Product Catalog Service",
     description="Elasticsearch-backed multilingual product search service with vernacular query mapping",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 app.add_middleware(CorrelationAndMetricsMiddleware, service_name="catalog_service")
 
 
-@app.on_event("startup")
-async def startup_event():
-    await es_catalog_client.connect()
 
 
 @app.get("/health")

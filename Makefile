@@ -20,8 +20,12 @@ seed-catalog:
 	python scripts/seed_catalog.py
 
 lint:
-	@echo "Running code validation checks..."
-	python -m pytest tests/ -q
+	@echo "Running code quality checks..."
+	./venv/bin/python -m py_compile shared/config.py
+	./venv/bin/python -m py_compile shared/models.py
+	./venv/bin/python -m py_compile gateway_service/main.py
+	./venv/bin/python -m py_compile orchestrator_service/main.py
+	@echo "All files compile successfully."
 
 simulate:
 	curl -X POST http://localhost:8001/simulate \

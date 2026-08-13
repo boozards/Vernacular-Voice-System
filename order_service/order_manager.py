@@ -2,7 +2,7 @@ import uuid
 import httpx
 import logging
 from typing import List, Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, UTC
 
 from shared.config import settings
 from shared.models import OrderResponse, OrderCreateRequest, CartItem
@@ -43,7 +43,7 @@ class OrderManager:
             "delivery_address": req.delivery_address or {"address": "Indore, MP", "pincode": "452001"},
             "status": "CONFIRMED",
             "payment_link": payment_link,
-            "created_at": datetime.utcnow().isoformat()
+            "created_at": datetime.now(UTC).isoformat()
         }
 
         IN_MEMORY_ORDERS[order_id] = order_data

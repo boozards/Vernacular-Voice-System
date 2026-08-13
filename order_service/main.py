@@ -14,25 +14,29 @@ from order_service.order_manager import order_manager
 setup_logger("order_service", settings.LOG_LEVEL)
 logger = logging.getLogger("order_service")
 
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await init_db()
+    yield
+
 app = FastAPI(
     title="VoiceKart Order Service",
     description="PostgreSQL-backed order, cart, payment integration, and status tracking service",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 app.add_middleware(CorrelationAndMetricsMiddleware, service_name="order_service")
 
-
-@app.on_event("startup")
-async def startup_event():
-    await init_db()
 
 
 @app.get("/health")

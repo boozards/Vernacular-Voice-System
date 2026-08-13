@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
-from datetime import datetime
+from datetime import datetime, UTC
 
 
 class LanguageCode(str, Enum):
@@ -115,7 +115,7 @@ class IntentResult(BaseModel):
 class ConversationTurn(BaseModel):
     role: str  # "user" or "assistant"
     content: str
-    timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+    timestamp: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
 class SessionState(BaseModel):
@@ -130,8 +130,8 @@ class SessionState(BaseModel):
     last_search_results: List[Product] = Field(default_factory=list)
     active_filters: Dict[str, Any] = Field(default_factory=dict)
     delivery_address: Optional[Dict[str, Any]] = None
-    created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
-    last_active: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+    created_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
+    last_active: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
 class STTRequest(BaseModel):

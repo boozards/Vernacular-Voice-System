@@ -1,5 +1,6 @@
 import httpx
 import logging
+import time
 from typing import Dict, Any, Optional
 
 from shared.config import settings
@@ -18,6 +19,7 @@ logger = logging.getLogger("orchestrator.pipeline")
 
 class PipelineOrchestrator:
     async def process_user_turn(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        start_time = time.time()
         user_phone = payload.get("user_phone", "+919876543210")
         audio_s3_key = payload.get("audio_s3_key")
         text_input = payload.get("text_input")
@@ -49,7 +51,21 @@ class PipelineOrchestrator:
                 logger.error(f"Failed calling STT Service: {e}")
 
         if not transcript:
-            transcript = "Mujhe running shoes dikhao"
+            response_text = "Mujhe aapka message samajh nahi aaya. Kya aap dobara bol sakte hain?"
+            session.conversation_history.append({"role": "assistant", "content": response_text})
+            session.state = transition_state(session.state, ConversationState.AWAITING_INPUT)
+            await session_store.save(session)
+            return {
+                "session_id": session.session_id,
+                "transcribed_text": "",
+                "detected_language": session.language,
+                "extracted_intent": "UNKNOWN",
+                "response_text": response_text,
+                "audio_url": "",
+                "audio_bytes_base64": None,
+                "cart": [i.model_dump() for i in session.cart],
+                "search_results_count": len(session.last_search_results)
+            }
 
         # Record user turn in history
         session.conversation_history.append({"role": "user", "content": transcript})
@@ -198,6 +214,9 @@ class PipelineOrchestrator:
         session.conversation_history.append({"role": "assistant", "content": response_text})
         session.state = transition_state(session.state, ConversationState.AWAITING_INPUT)
         await session_store.save(session)
+
+        from shared.middleware import E2E_RESPONSE_LATENCY
+        E2E_RESPONSE_LATENCY.labels(language=session.language).observe(time.time() - start_time)
 
         return {
             "session_id": session.session_id,

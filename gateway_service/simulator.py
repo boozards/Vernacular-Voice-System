@@ -95,5 +95,5 @@ async def simulate_voice_commerce(req: SimulateRequest):
         logger.error(f"Simulation failed with unhandled exception: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Simulator internal error: {str(e)}"
+            detail="An internal error occurred processing your simulation request"
         )

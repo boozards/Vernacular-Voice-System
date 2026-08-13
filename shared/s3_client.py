@@ -1,6 +1,7 @@
 import os
 import uuid
 import logging
+import asyncio
 from typing import Optional, Tuple
 from shared.config import settings
 
@@ -47,13 +48,15 @@ class S3AudioStorage:
 
         if self.s3_client:
             try:
-                self.s3_client.put_object(
-                    Bucket=self.bucket,
-                    Key=key,
-                    Body=audio_bytes,
-                    ContentType=f"audio/{extension}",
-                    Tagging="TTL=24h"
-                )
+                def _put_s3():
+                    self.s3_client.put_object(
+                        Bucket=self.bucket,
+                        Key=key,
+                        Body=audio_bytes,
+                        ContentType=f"audio/{extension}",
+                        Tagging="TTL=24h"
+                    )
+                await asyncio.to_thread(_put_s3)
                 url = f"{settings.S3_ENDPOINT_URL}/{self.bucket}/{key}"
                 return key, url
             except Exception as e:
@@ -61,8 +64,10 @@ class S3AudioStorage:
 
         # Fallback to local storage
         local_path = os.path.join(LOCAL_STORAGE_DIR, f"{file_id}.{extension}")
-        with open(local_path, "wb") as f:
-            f.write(audio_bytes)
+        def _write_local():
+            with open(local_path, "wb") as f:
+                f.write(audio_bytes)
+        await asyncio.to_thread(_write_local)
 
         local_url = f"file://{local_path}"
         return local_path, local_url
@@ -70,13 +75,17 @@ class S3AudioStorage:
     async def download_audio_bytes(self, key_or_path: str) -> Optional[bytes]:
         """Downloads audio bytes from S3/MinIO or local file system."""
         if os.path.exists(key_or_path):
-            with open(key_or_path, "rb") as f:
-                return f.read()
+            def _read_local():
+                with open(key_or_path, "rb") as f:
+                    return f.read()
+            return await asyncio.to_thread(_read_local)
 
         if self.s3_client:
             try:
-                response = self.s3_client.get_object(Bucket=self.bucket, Key=key_or_path)
-                return response["Body"].read()
+                def _get_s3():
+                    response = self.s3_client.get_object(Bucket=self.bucket, Key=key_or_path)
+                    return response["Body"].read()
+                return await asyncio.to_thread(_get_s3)
             except Exception as e:
                 logger.error(f"Failed to download from S3 for key {key_or_path}: {e}")
 

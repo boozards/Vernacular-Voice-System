@@ -35,7 +35,7 @@ VOICE_SETTINGS = {
 def preprocess_ssml(text: str) -> str:
     """Preprocesses text to insert natural speech pauses before prices and numbers."""
     # Add slight pause before price patterns (e.g. ₹1,899 -> sirf... ₹1,899)
-    text = re.sub(r'₹(\d+)', r'sirf... ₹\1', text)
+    text = re.sub(r'(?<!sirf\.\.\. )₹(\d+)', r'sirf... ₹\1', text)
     return text
 
 

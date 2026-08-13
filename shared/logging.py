@@ -53,8 +53,7 @@ class JSONFormatter(logging.Formatter):
 
         if record.exc_info:
             log_object["exception"] = self.formatException(record.exc_info)
-
-        return json.dumps(log_object)
+        return json.dumps(log_object, default=str)
 
 
 def setup_logger(service_name: str, level: str = "INFO") -> logging.Logger:

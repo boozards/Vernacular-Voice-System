@@ -1,5 +1,6 @@
 import httpx
 import logging
+import secrets
 from typing import Dict, Any
 from fastapi import APIRouter, Request, Response, Query, HTTPException, status
 from shared.config import settings
@@ -17,7 +18,7 @@ async def verify_webhook(
     challenge: str = Query(..., alias="hub.challenge"),
 ):
     """WhatsApp Cloud API Webhook Verification Challenge."""
-    if mode == "subscribe" and token == settings.WHATSAPP_VERIFY_TOKEN:
+    if mode == "subscribe" and secrets.compare_digest(token, settings.WHATSAPP_VERIFY_TOKEN):
         logger.info("WhatsApp webhook verified successfully")
         return Response(content=challenge, media_type="text/plain")
     
@@ -39,6 +40,7 @@ async def handle_incoming_webhook(request: Request):
     try:
         body = await request.json()
     except Exception:
+        logger.warning("Received malformed JSON payload in webhook")
         return {"status": "ignored"}
 
     # Extract entry data
