@@ -39,14 +39,24 @@
 
 ## 🛠️ Microservices Breakdown
 
-| Service Name | Port | Primary Responsibility |
-|--------------|------|------------------------|
-| **Gateway Service** | `8001` | WhatsApp Cloud API Webhook handler, HMAC verification, message deduplication, and `/simulate` API for testing without WhatsApp. |
-| **Conversation Orchestrator** | `8002` | State Machine transitions, LLM intent extraction (`PRODUCT_SEARCH`, `ADD_TO_CART`, `CHECKOUT`, etc.), session management, response generation. |
-| **TTS Service** | `8003` | ElevenLabs API v1 integration, streaming synthesis, voice mapping across 8 Indian languages, Redis caching (7-day TTL), gTTS fallback. |
-| **STT Service** | `8004` | OpenAI Whisper transcription (`whisper-1`), audio preprocessing (FFmpeg 16kHz mono, pydub silence trimming), Indian language detection. |
-| **Catalog Service** | `8005` | Elasticsearch 8.x search engine with vernacular synonym mapping ("juta" → shoes, "chappal" → sandals), BM25 + vector matching, in-memory fallback. |
-| **Order Service** | `8006` | PostgreSQL cart management, order creation, GST calculation, Razorpay UPI payment link generation & COD, proactive voice notifications. |
+| Service Name | Port | Health Check | Primary Responsibility |
+|--------------|------|--------------|------------------------|
+| **Gateway Service** | `8001` | `GET /health` | WhatsApp Cloud API Webhook handler, HMAC SHA-256 verification, message deduplication, and `/simulate` API for testing without WhatsApp. |
+| **Conversation Orchestrator** | `8002` | `GET /health` | State Machine transitions (8 states), LLM intent extraction (`PRODUCT_SEARCH`, `ADD_TO_CART`, `CHECKOUT`, etc.), session management, response generation. |
+| **TTS Service** | `8003` | `GET /health` | ElevenLabs API v1 integration, streaming synthesis, voice mapping across 8 Indian languages, Redis caching (7-day TTL), gTTS fallback engine. |
+| **STT Service** | `8004` | `GET /health` | OpenAI Whisper transcription (`whisper-1`), audio preprocessing (FFmpeg 16kHz mono, pydub silence trimming), Indian language auto-detection. |
+| **Catalog Service** | `8005` | `GET /health` | Elasticsearch 8.x search engine with vernacular synonym mapping ("juta" → shoes, "chappal" → sandals), BM25 + vector matching, in-memory fallback index. |
+| **Order Service** | `8006` | `GET /health` | PostgreSQL cart management, order creation, GST calculation, Razorpay UPI payment link generation & COD, proactive voice notifications. |
+
+---
+
+## 🔒 Security & Senior SWE Hardening
+
+- **Non-blocking Event Loop**: All synchronous `boto3` calls and file I/O operations are offloaded using `asyncio.to_thread()` to maintain event loop responsiveness under 5,000+ concurrent sessions.
+- **Timing Attack Defense**: Webhook verification token comparison uses constant-time `secrets.compare_digest()`.
+- **CORS Specification Compliance**: Standardized CORS origin headers across all services without forbidden wildcard credentials combinations.
+- **Structured PII Protection**: Masking applied to phone numbers (`+91****3210`) and delivery addresses in all JSON loggers.
+- **SSML Fixes**: Regex lookbehinds (`(?<!sirf\.\.\. )₹(\d+)`) eliminate duplicate string mutations in speech synthesis text preprocessing.
 
 ---
 
@@ -54,8 +64,8 @@
 
 ### Prerequisites
 - Docker & Docker Compose
-- Python 3.12+ (for local scripts/tests)
-- FFmpeg (for local audio processing)
+- Python 3.12+ (for local scripts and pytest)
+- FFmpeg (installed automatically in STT container)
 
 ### 1. Environment Setup
 Copy `.env.example` to `.env`:
@@ -64,11 +74,11 @@ cp .env.example .env
 ```
 
 ### 2. Launch All Microservices & Infrastructure
-Use `docker-compose` or `make`:
+Use `docker compose` or `make`:
 ```bash
 make dev
 # OR
-docker-compose up --build
+docker compose up --build
 ```
 
 ### 3. Seed Catalog with 500+ Realistic Products
@@ -119,18 +129,23 @@ Prometheus metrics are exposed across all services at `/metrics`:
 - `voicekart_e2e_response_latency_seconds`: End-to-end response latency distribution.
 - `voicekart_elevenlabs_quota_remaining_pct`: Gauge monitoring ElevenLabs character quota.
 - `voicekart_fallback_tts_activations_total`: Counter tracking gTTS fallback activations.
-- `voicekart_http_requests_total`: Request counter tagged by service, status code, and endpoint.
+- `voicekart_http_requests_total`: Request counter tagged by service, status code, and endpoint route.
 
-Access Prometheus & Grafana:
+### Monitoring Access:
 - **Prometheus UI**: `http://localhost:9090`
 - **Grafana Dashboard**: Import `monitoring/grafana_dashboard.json` into Grafana.
+- **Alert Rules**: Defined in `monitoring/alerts.yml` (P95 latency > 4s, low quota < 10%, high order failure rate > 5%).
 
 ---
 
-## 🧪 Running Automated Tests
+## 🧪 Running Automated Tests & Code Quality
 
 Run the full Pytest unit and integration test suite:
 ```bash
 make test
 ```
-# Vernacular-Voice-System
+
+Run code compilation quality checks:
+```bash
+make lint
+```
