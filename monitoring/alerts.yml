@@ -1,0 +1,32 @@
+groups:
+  - name: voicekart_alerts
+    rules:
+      - alert: VoiceKartHighE2ELatency
+        expr: histogram_quantile(0.95, sum(rate(voicekart_e2e_response_latency_seconds_bucket[5m])) by (le)) > 4
+        for: 5m
+        labels:
+          severity: critical
+          receiver: pagerduty
+        annotations:
+          summary: "VoiceKart End-to-End Latency P95 exceeds 4 seconds"
+          description: "P95 voice response latency is {{ $value }}s over the last 5 minutes."
+
+      - alert: ElevenLabsQuotaLow
+        expr: voicekart_elevenlabs_quota_remaining_pct < 10
+        for: 1m
+        labels:
+          severity: warning
+          receiver: slack
+        annotations:
+          summary: "ElevenLabs TTS Quota below 10%"
+          description: "Remaining ElevenLabs quota is {{ $value }}%. Auto-enabling gTTS fallback engine."
+
+      - alert: HighOrderFailureRate
+        expr: sum(rate(voicekart_http_requests_total{service="order_service", status_code=~"5.."}[5m])) / sum(rate(voicekart_http_requests_total{service="order_service"}[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          receiver: pagerduty
+        annotations:
+          summary: "Order Service failure rate exceeds 5%"
+          description: "Order creation and payment failure rate is currently at {{ $value | humanizePercentage }}."

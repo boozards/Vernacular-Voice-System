@@ -1,0 +1,156 @@
+services:
+  # Infrastructure Services
+  redis:
+    image: redis:7-alpine
+    container_name: voicekart_redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: voicekart_postgres
+    environment:
+      POSTGRES_USER: voicekart
+      POSTGRES_PASSWORD: voicekart_pass
+      POSTGRES_DB: voicekart_db
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U voicekart -d voicekart_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
+    container_name: voicekart_elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q 'status'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    container_name: voicekart_minio
+
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+
+  # VoiceKart Microservices
+  gateway_service:
+    build:
+      context: .
+      dockerfile: gateway_service/Dockerfile
+    container_name: voicekart_gateway
+    ports:
+      - "8001:8001"
+    environment:
+      - ENV=development
+      - REDIS_HOST=redis
+      - S3_ENDPOINT_URL=http://minio:9000
+      - ORCHESTRATOR_SERVICE_URL=http://orchestrator_service:8002
+    depends_on:
+      redis:
+        condition: service_healthy
+      orchestrator_service:
+        condition: service_started
+
+  orchestrator_service:
+    build:
+      context: .
+      dockerfile: orchestrator_service/Dockerfile
+    container_name: voicekart_orchestrator
+    ports:
+      - "8002:8002"
+    environment:
+      - ENV=development
+      - REDIS_HOST=redis
+      - STT_SERVICE_URL=http://stt_service:8004
+      - TTS_SERVICE_URL=http://tts_service:8003
+      - CATALOG_SERVICE_URL=http://catalog_service:8005
+      - ORDER_SERVICE_URL=http://order_service:8006
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  tts_service:
+    build:
+      context: .
+      dockerfile: tts_service/Dockerfile
+    container_name: voicekart_tts
+    ports:
+      - "8003:8003"
+    environment:
+      - ENV=development
+      - REDIS_HOST=redis
+      - S3_ENDPOINT_URL=http://minio:9000
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  stt_service:
+    build:
+      context: .
+      dockerfile: stt_service/Dockerfile
+    container_name: voicekart_stt
+    ports:
+      - "8004:8004"
+    environment:
+      - ENV=development
+      - S3_ENDPOINT_URL=http://minio:9000
+
+  catalog_service:
+    build:
+      context: .
+      dockerfile: catalog_service/Dockerfile
+    container_name: voicekart_catalog
+    ports:
+      - "8005:8005"
+    environment:
+      - ENV=development
+      - ELASTICSEARCH_HOST=http://elasticsearch:9200
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+
+  order_service:
+    build:
+      context: .
+      dockerfile: order_service/Dockerfile
+    container_name: voicekart_order
+    ports:
+      - "8006:8006"
+    environment:
+      - ENV=development
+      - POSTGRES_HOST=postgres
+      - GATEWAY_SERVICE_URL=http://gateway_service:8001
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Monitoring
+  prometheus:
+    image: prom/prometheus:v2.49.0
+    container_name: voicekart_prometheus
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml
+    ports:
+      - "9090:9090"
